@@ -1,7 +1,6 @@
 package main
 
 import (
-	"io"
 	"log"
 	"net/http"
 	"time"
@@ -13,11 +12,10 @@ const (
 
 func (lb *LeakyBucket) Limit(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if !lb.Add() {
+		if !lb.Add(w, r) {
 			http.Error(w, "Rate limit exceeded", http.StatusTooManyRequests)
 			return
 		}
-		next.ServeHTTP(w, r)
 	})
 }
 
@@ -48,25 +46,4 @@ func main() {
 
 func handleRequest(w http.ResponseWriter, req *http.Request) {
 	log.Printf("handleRequest %s\n", req.URL)
-	response := sendRequest(baseURL)
-	if response != nil {
-		body, _ := io.ReadAll(response.Body)
-		w.WriteHeader(response.StatusCode)
-		_, err := w.Write(body)
-		if err != nil {
-			log.Fatal(err)
-			return
-		}
-	}
-
-}
-
-func sendRequest(URL string) *http.Response {
-	log.Printf("Sending request to %s\n", URL)
-	resp, err := http.Get(URL)
-	if err != nil {
-		log.Fatal("Error sending request: ", err)
-		return nil
-	}
-	return resp
 }
