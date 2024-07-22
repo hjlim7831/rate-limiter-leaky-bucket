@@ -11,13 +11,9 @@ const (
 	baseURL = "https://httpbin.org"
 )
 
-type RateLimiter struct {
-	limiter *rate.Limiter // 근데 여기부터 바뀌어야 할 듯
-}
-
-func (rl *RateLimiter) Limit(next http.Handler) http.Handler {
+func (lb *LeakyBucket) Limit(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if rl.limiter.Allow() == false {
+		if !lb.Add() {
 			http.Error(w, "Rate limit exceeded", http.StatusTooManyRequests)
 			return
 		}
@@ -26,13 +22,13 @@ func (rl *RateLimiter) Limit(next http.Handler) http.Handler {
 }
 
 func main() {
-	// rateLimiter := NewRateLimiter()
+	leakyBucket := NewLeakyBucket(3, 10*time.Second)
 	mux := http.NewServeMux()
 	mux.HandleFunc(
 		"/request",
 		handleRequest)
 
-	rateLimitedMux := rateLimiter.Limit(mux)
+	rateLimitedMux := leakyBucket.Limit(mux)
 
 	srv := &http.Server{
 		Addr:         ":8080",
