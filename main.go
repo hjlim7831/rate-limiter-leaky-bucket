@@ -8,19 +8,24 @@ import (
 
 const (
 	baseURL = "https://httpbin.org"
+	// baseURL = "https://google.com"
 )
 
 func (lb *LeakyBucket) Limit(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if !lb.Add(w, r) {
+		log.Print("handle request\n")
+		req := Request{w: w, r: r, done: make(chan struct{})}
+		if !lb.Add(req) {
 			http.Error(w, "Rate limit exceeded", http.StatusTooManyRequests)
 			return
 		}
+		<-req.done
+		next.ServeHTTP(w, r)
 	})
 }
 
 func main() {
-	leakyBucket := NewLeakyBucket(3, 10*time.Second)
+	leakyBucket := NewLeakyBucket(3, 5*time.Second)
 	mux := http.NewServeMux()
 	mux.HandleFunc(
 		"/request",
@@ -41,7 +46,6 @@ func main() {
 		log.Fatal(err)
 		return
 	}
-
 }
 
 func handleRequest(w http.ResponseWriter, req *http.Request) {

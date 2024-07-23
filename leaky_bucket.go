@@ -9,8 +9,9 @@ import (
 )
 
 type Request struct {
-	w http.ResponseWriter
-	r *http.Request
+	w    http.ResponseWriter
+	r    *http.Request
+	done chan struct{} // 완료 신호를 위한 채널
 }
 
 type LeakyBucket struct {
@@ -40,6 +41,7 @@ func (lb *LeakyBucket) startLeaking() {
 		select {
 		case req := <-lb.queue:
 			lb.handleRequest(req)
+			close(req.done)
 			// 누수 성공
 
 		default:
@@ -54,8 +56,16 @@ func (lb *LeakyBucket) handleRequest(req Request) {
 	if response != nil {
 		defer response.Body.Close()
 		body, _ := io.ReadAll(response.Body)
+
 		req.w.WriteHeader(response.StatusCode)
 		_, err := req.w.Write(body)
+		if err != nil {
+			log.Fatal(err)
+			return
+		}
+	} else {
+		req.w.WriteHeader(http.StatusInternalServerError)
+		_, err := req.w.Write([]byte("Internal Server Error"))
 		if err != nil {
 			log.Fatal(err)
 			return
@@ -73,12 +83,12 @@ func sendRequest(URL string) *http.Response {
 	return resp
 }
 
-func (lb *LeakyBucket) Add(w http.ResponseWriter, r *http.Request) bool {
+func (lb *LeakyBucket) Add(req Request) bool {
 	lb.mu.Lock()
 	defer lb.mu.Unlock()
 
 	select {
-	case lb.queue <- Request{w: w, r: r}:
+	case lb.queue <- req:
 		// 토큰 추가 성공
 		return true
 	default:
