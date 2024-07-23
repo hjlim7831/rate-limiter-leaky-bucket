@@ -4,7 +4,6 @@ import (
 	"io"
 	"log"
 	"net/http"
-	"sync"
 	"time"
 )
 
@@ -17,8 +16,7 @@ type Request struct {
 type LeakyBucket struct {
 	capacity int           // 버킷 최대 용량
 	rate     time.Duration // 누수율 (누수 간격)
-	queue    chan Request  // 토큰을 저장하는 채널
-	mu       sync.Mutex
+	queue    chan Request  // 요청을 저장하는 채널
 }
 
 func NewLeakyBucket(capacity int, rate time.Duration) *LeakyBucket {
@@ -46,6 +44,7 @@ func (lb *LeakyBucket) startLeaking() {
 
 		default:
 			// 버킷이 비어 있음
+			log.Println("empty bucket")
 		}
 	}
 }
@@ -84,9 +83,6 @@ func sendRequest(URL string) *http.Response {
 }
 
 func (lb *LeakyBucket) Add(req Request) bool {
-	lb.mu.Lock()
-	defer lb.mu.Unlock()
-
 	select {
 	case lb.queue <- req:
 		// 토큰 추가 성공
